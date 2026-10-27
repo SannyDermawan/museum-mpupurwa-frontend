@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { AuthHeading } from "@/components/auth/AuthShell";
+import { AuthHeading } from "../../components/AuthShell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiPost } from "@/lib/api";
