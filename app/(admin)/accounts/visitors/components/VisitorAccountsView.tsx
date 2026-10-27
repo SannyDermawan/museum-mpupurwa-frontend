@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AccountsToolbar } from "@/components/accounts/AccountsToolbar";
-import { DeleteAccountModal } from "@/components/accounts/DeleteAccountModal";
-import { EditVisitorModal } from "@/components/accounts/EditVisitorModal";
+import { AccountsToolbar } from "../../components/AccountsToolbar";
+import { DeleteAccountModal } from "../../components/DeleteAccountModal";
+import { EditVisitorModal } from "./EditVisitorModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";

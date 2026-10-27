@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FormAlert } from "@/components/accounts/FormAlert";
+import { FormAlert } from "./FormAlert";
 import { Button } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/Modal";

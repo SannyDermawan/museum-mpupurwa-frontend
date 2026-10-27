@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RANGE_OPTIONS, RangeSelect } from "@/components/dashboard/RangeSelect";
+import { RANGE_OPTIONS, RangeSelect } from "./RangeSelect";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { ErrorState, LoadingState } from "@/components/ui/PageState";
 import { useApiData } from "@/hooks/use-api-data";

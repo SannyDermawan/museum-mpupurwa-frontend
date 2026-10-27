@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AccountsToolbar } from "@/components/accounts/AccountsToolbar";
-import { AddAdminModal } from "@/components/accounts/AddAdminModal";
-import { DeleteAccountModal } from "@/components/accounts/DeleteAccountModal";
-import { EditAdminModal } from "@/components/accounts/EditAdminModal";
+import { AccountsToolbar } from "../../components/AccountsToolbar";
+import { AddAdminModal } from "./AddAdminModal";
+import { DeleteAccountModal } from "../../components/DeleteAccountModal";
+import { EditAdminModal } from "./EditAdminModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
