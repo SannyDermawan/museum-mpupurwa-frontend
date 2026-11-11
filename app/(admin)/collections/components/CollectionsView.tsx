@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import CollectionFormModal, { CollectionFormData } from "./CollectionFormModal";
+import CollectionFormModal from "./CollectionFormModal";
 import { CollectionsTable } from "./CollectionsTable";
 import { CollectionsToolbar } from "./CollectionsToolbar";
 import DeleteCollectionModal from "./DeleteCollectionModal";
-import type { CollectionItem } from "./types";
+import { getMediaStatus } from "./types";
+import type { CollectionFormData, CollectionItem } from "./types";
 
 // Sample data koleksi museum
 const INITIAL_COLLECTIONS: CollectionItem[] = [
@@ -76,7 +77,10 @@ export function CollectionsView() {
             nama: data.nama,
             era: data.era,
             material: data.material || "Batu andesit",
-            statusMedia: data.videoUrl && data.pdfDoc ? "Lengkap" : "Belum ada video",
+            statusMedia: getMediaStatus(data.videoUrl, data.pdfUrl),
+            fotoUrl: data.fotoUrl,
+            pdfUrl: data.pdfUrl,
+            videoUrl: data.videoUrl,
           };
           setCollections((prev) => [newItem, ...prev]);
         }}

@@ -1,102 +1,112 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-
-export interface CollectionFormData {
-  nama: string;
-  era: string;
-  periode: string;
-  asal: string;
-  material: string;
-  ukuran: string;
-  makna: string;
-  foto?: File | null;
-  videoUrl: string;
-  pdfDoc?: File | null;
-}
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import type { ChangeEvent } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { CollectionFormData } from "./types";
+import { uploadFile } from "@/lib/upload";
+import { collectionSchema, ERA_OPTIONS } from "@/lib/validations/collections";
+import type { CollectionFormValues } from "@/lib/validations/collections";
 
 interface CollectionFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: CollectionFormData) => void;
-  initialData?: CollectionFormData | null;
+  /** Called with the text fields and the Vercel Blob links, after the files were uploaded. */
+  onSave: (data: CollectionFormData) => void | Promise<void>;
+  initialData?: Partial<CollectionFormData> | null;
 }
 
-export default function CollectionFormModal({
-  isOpen,
-  onClose,
-  onSave,
-  initialData,
-}: CollectionFormModalProps) {
-  const [formData, setFormData] = useState<CollectionFormData>({
-    nama: "",
-    era: "Kanjuruhan",
-    periode: "",
-    asal: "",
-    material: "",
-    ukuran: "",
-    makna: "",
-    foto: null,
-    videoUrl: "",
-    pdfDoc: null,
+const EMPTY_VALUES: CollectionFormValues = {
+  nama: "",
+  era: "Kanjuruhan",
+  periode: "",
+  asal: "",
+  material: "",
+  ukuran: "",
+  makna: "",
+  videoUrl: "",
+  foto: null,
+  pdfDoc: null,
+};
+
+const inputClass = (error?: string) =>
+  `w-full border rounded-lg p-2.5 px-3 outline-none ${
+    error ? "border-[#B3261E]" : "border-[#E6E2D8] focus:border-[#D4AF37]"
+  }`;
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <div className="text-[12px] text-[#B3261E] mt-1">{message}</div> : null;
+}
+
+export default function CollectionFormModal({ isOpen, onClose, onSave, initialData }: CollectionFormModalProps) {
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    control,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<CollectionFormValues>({
+    resolver: zodResolver(collectionSchema),
+    defaultValues: EMPTY_VALUES,
   });
 
-  const [errors, setErrors] = useState<{ nama?: string }>({});
-  const [fotoName, setFotoName] = useState<string>("Belum ada foto. Format JPG atau PNG.");
-  const [pdfName, setPdfName] = useState<string>("Belum ada dokumen.");
-
+  // Start from the collection being edited, or from an empty form, every time the popup opens.
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData);
-    } else {
-      setFormData({
-        nama: "",
-        era: "Kanjuruhan",
-        periode: "",
-        asal: "",
-        material: "",
-        ukuran: "",
-        makna: "",
-        foto: null,
-        videoUrl: "",
-        pdfDoc: null,
-      });
-      setFotoName("Belum ada foto. Format JPG atau PNG.");
-      setPdfName("Belum ada dokumen.");
-    }
-    setErrors({});
-  }, [initialData, isOpen]);
+    if (!isOpen) return;
+    reset({
+      ...EMPTY_VALUES,
+      nama: initialData?.nama ?? "",
+      era: initialData?.era ?? "Kanjuruhan",
+      periode: initialData?.periode ?? "",
+      asal: initialData?.asal ?? "",
+      material: initialData?.material ?? "",
+      ukuran: initialData?.ukuran ?? "",
+      makna: initialData?.makna ?? "",
+      videoUrl: initialData?.videoUrl ?? "",
+    });
+  }, [isOpen, initialData, reset]);
+
+  const foto = useWatch({ control, name: "foto" });
+  const pdfDoc = useWatch({ control, name: "pdfDoc" });
 
   if (!isOpen) return null;
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (name === "nama" && value.trim()) {
-      setErrors((prev) => ({ ...prev, nama: undefined }));
-    }
+  const fotoName = foto?.name ?? (initialData?.fotoUrl ? "Foto sudah tersimpan." : "Belum ada foto. Format JPG atau PNG.");
+  const pdfName = pdfDoc?.name ?? (initialData?.pdfUrl ? "Dokumen sudah tersimpan." : "Belum ada dokumen.");
+
+  const handleFileChange = (field: "foto" | "pdfDoc") => (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) setValue(field, file, { shouldValidate: true, shouldDirty: true });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: "foto" | "pdfDoc") => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFormData((prev) => ({ ...prev, [field]: file }));
-      if (field === "foto") setFotoName(file.name);
-      if (field === "pdfDoc") setPdfName(file.name);
-    }
-  };
+  async function onSubmit(values: CollectionFormValues) {
+    try {
+      // Only a newly chosen file is uploaded; otherwise the link that was already saved is kept.
+      const [fotoUrl, pdfUrl] = await Promise.all([
+        values.foto ? uploadFile(values.foto, "foto") : Promise.resolve(initialData?.fotoUrl ?? null),
+        values.pdfDoc ? uploadFile(values.pdfDoc, "dokumen") : Promise.resolve(initialData?.pdfUrl ?? null),
+      ]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.nama.trim()) {
-      setErrors({ nama: "Nama koleksi wajib diisi." });
-      return;
+      await onSave({
+        nama: values.nama,
+        era: values.era,
+        periode: values.periode,
+        asal: values.asal,
+        material: values.material,
+        ukuran: values.ukuran,
+        makna: values.makna,
+        videoUrl: values.videoUrl,
+        fotoUrl,
+        pdfUrl,
+      });
+      onClose();
+    } catch (error) {
+      setError("root.server", { message: error instanceof Error ? error.message : "Gagal menyimpan koleksi." });
     }
-    onSave(formData);
-    onClose();
-  };
+  }
 
   return (
     <div className="fixed inset-0 bg-[#1F1A0F]/40 z-[100] flex items-center justify-center p-6">
@@ -118,119 +128,102 @@ export default function CollectionFormModal({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="p-6 text-[13.5px] text-[#241A0F]">
+            {errors.root?.server && (
+              <div
+                role="alert"
+                className="mb-3.5 rounded-lg border border-[#F1CFCD] bg-[#FBEAE9] px-3 py-2.5 text-[12.5px] leading-snug text-[#B3261E]"
+              >
+                {errors.root.server.message}
+              </div>
+            )}
+
             {/* Nama Koleksi */}
             <div className="mb-3.5">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Nama koleksi
-              </label>
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Nama koleksi</label>
               <input
                 type="text"
-                name="nama"
-                value={formData.nama}
-                onChange={handleChange}
                 placeholder="Contoh: Arca Ganesya Tikus"
-                className={`w-full border rounded-lg p-2.5 px-3 outline-none text-[13.5px] ${
-                  errors.nama ? "border-[#B3261E]" : "border-[#E6E2D8] focus:border-[#D4AF37]"
-                }`}
+                className={`${inputClass(errors.nama?.message)} text-[13.5px]`}
+                {...register("nama")}
               />
-              {errors.nama && (
-                <div className="text-[12px] text-[#B3261E] mt-1">{errors.nama}</div>
-              )}
+              <FieldError message={errors.nama?.message} />
             </div>
 
             {/* Era & Periode */}
             <div className="grid grid-cols-2 gap-3.5 mb-3.5">
               <div>
-                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                  Era / kerajaan
-                </label>
+                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Era / kerajaan</label>
                 <select
-                  name="era"
-                  value={formData.era}
-                  onChange={handleChange}
-                  className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 bg-white outline-none focus:border-[#D4AF37]"
+                  className={`${inputClass(errors.era?.message)} bg-white`}
+                  {...register("era")}
                 >
-                  <option value="Kanjuruhan">Kanjuruhan</option>
-                  <option value="Tumapel">Tumapel</option>
-                  <option value="Singosari">Singosari</option>
-                  <option value="Majapahit">Majapahit</option>
-                  <option value="Prasasti">Prasasti</option>
+                  {ERA_OPTIONS.map((era) => (
+                    <option key={era} value={era}>
+                      {era}
+                    </option>
+                  ))}
                 </select>
+                <FieldError message={errors.era?.message} />
               </div>
               <div>
-                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                  Periode
-                </label>
+                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Periode</label>
                 <input
                   type="text"
-                  name="periode"
-                  value={formData.periode}
-                  onChange={handleChange}
                   placeholder="Contoh: Abad 13"
-                  className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none focus:border-[#D4AF37]"
+                  className={inputClass(errors.periode?.message)}
+                  {...register("periode")}
                 />
+                <FieldError message={errors.periode?.message} />
               </div>
             </div>
 
             {/* Asal & Material */}
             <div className="grid grid-cols-2 gap-3.5 mb-3.5">
               <div>
-                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                  Asal temuan
-                </label>
+                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Asal temuan</label>
                 <input
                   type="text"
-                  name="asal"
-                  value={formData.asal}
-                  onChange={handleChange}
                   placeholder="Contoh: Malang Raya"
-                  className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none focus:border-[#D4AF37]"
+                  className={inputClass(errors.asal?.message)}
+                  {...register("asal")}
                 />
+                <FieldError message={errors.asal?.message} />
               </div>
               <div>
-                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                  Material
-                </label>
+                <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Material</label>
                 <input
                   type="text"
-                  name="material"
-                  value={formData.material}
-                  onChange={handleChange}
                   placeholder="Contoh: Batu andesit"
-                  className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none focus:border-[#D4AF37]"
+                  className={inputClass(errors.material?.message)}
+                  {...register("material")}
                 />
+                <FieldError message={errors.material?.message} />
               </div>
             </div>
 
             {/* Ukuran */}
             <div className="mb-3.5">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Ukuran
-              </label>
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Ukuran</label>
               <input
                 type="text"
-                name="ukuran"
-                value={formData.ukuran}
-                onChange={handleChange}
                 placeholder="Contoh: T 90 cm, L 60 cm"
-                className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none focus:border-[#D4AF37]"
+                className={inputClass(errors.ukuran?.message)}
+                {...register("ukuran")}
               />
+              <FieldError message={errors.ukuran?.message} />
             </div>
 
             {/* Sejarah dan Makna */}
             <div className="mb-3.5">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Sejarah dan makna
-              </label>
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Sejarah dan makna</label>
               <textarea
-                name="makna"
-                value={formData.makna}
-                onChange={handleChange}
                 placeholder="Tuliskan sejarah, fungsi, dan makna koleksi. Teks ini tampil di halaman detail aplikasi."
-                className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none min-h-[96px] focus:border-[#D4AF37] resize-y"
+                className={`${inputClass(errors.makna?.message)} min-h-[96px] resize-y`}
+                {...register("makna")}
               ></textarea>
+              <FieldError message={errors.makna?.message} />
             </div>
 
             {/* Media Upload Section */}
@@ -240,14 +233,13 @@ export default function CollectionFormModal({
 
             {/* Foto Koleksi */}
             <div className="mb-3.5">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Foto koleksi
-              </label>
-              <label className="flex items-center gap-3 border border-dashed border-[#CFC9BA] rounded-lg p-3 bg-[#F7F5F0] cursor-pointer hover:border-[#D4AF37]">
-                <svg
-                  className="w-5 h-5 stroke-[#7A7368] fill-none stroke-[1.6] flex-shrink-0"
-                  viewBox="0 0 24 24"
-                >
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Foto koleksi</label>
+              <label
+                className={`flex items-center gap-3 border border-dashed rounded-lg p-3 bg-[#F7F5F0] cursor-pointer hover:border-[#D4AF37] ${
+                  errors.foto ? "border-[#B3261E]" : "border-[#CFC9BA]"
+                }`}
+              >
+                <svg className="w-5 h-5 stroke-[#7A7368] fill-none stroke-[1.6] flex-shrink-0" viewBox="0 0 24 24">
                   <rect x="3" y="5" width="18" height="14" rx="2" />
                   <circle cx="9" cy="11" r="2" />
                   <path d="M21 16l-5-5-8 8" />
@@ -258,26 +250,24 @@ export default function CollectionFormModal({
                 </div>
                 <input
                   type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileChange(e, "foto")}
+                  accept="image/jpeg,image/png"
+                  onChange={handleFileChange("foto")}
                   className="hidden"
                 />
               </label>
+              <FieldError message={errors.foto?.message} />
             </div>
 
             {/* Link YouTube */}
             <div className="mb-3.5">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Link video YouTube
-              </label>
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Link video YouTube</label>
               <input
                 type="text"
-                name="videoUrl"
-                value={formData.videoUrl}
-                onChange={handleChange}
                 placeholder="https://youtu.be/..."
-                className="w-full border border-[#E6E2D8] rounded-lg p-2.5 px-3 outline-none focus:border-[#D4AF37]"
+                className={inputClass(errors.videoUrl?.message)}
+                {...register("videoUrl")}
               />
+              <FieldError message={errors.videoUrl?.message} />
               <div className="text-[12px] text-[#7A7368] mt-1 leading-snug">
                 Kosongkan jika belum ada video. Tombol Tonton Video di aplikasi akan tersembunyi.
               </div>
@@ -285,14 +275,13 @@ export default function CollectionFormModal({
 
             {/* PDF Dokumen */}
             <div className="mb-0">
-              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">
-                Dokumen informasi (PDF)
-              </label>
-              <label className="flex items-center gap-3 border border-dashed border-[#CFC9BA] rounded-lg p-3 bg-[#F7F5F0] cursor-pointer hover:border-[#D4AF37]">
-                <svg
-                  className="w-5 h-5 stroke-[#7A7368] fill-none stroke-[1.6] flex-shrink-0"
-                  viewBox="0 0 24 24"
-                >
+              <label className="text-[12px] font-bold mb-1.5 block text-[#241A0F]">Dokumen informasi (PDF)</label>
+              <label
+                className={`flex items-center gap-3 border border-dashed rounded-lg p-3 bg-[#F7F5F0] cursor-pointer hover:border-[#D4AF37] ${
+                  errors.pdfDoc ? "border-[#B3261E]" : "border-[#CFC9BA]"
+                }`}
+              >
+                <svg className="w-5 h-5 stroke-[#7A7368] fill-none stroke-[1.6] flex-shrink-0" viewBox="0 0 24 24">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
                   <path d="M14 2v6h6" />
                 </svg>
@@ -303,10 +292,11 @@ export default function CollectionFormModal({
                 <input
                   type="file"
                   accept="application/pdf"
-                  onChange={(e) => handleFileChange(e, "pdfDoc")}
+                  onChange={handleFileChange("pdfDoc")}
                   className="hidden"
                 />
               </label>
+              <FieldError message={errors.pdfDoc?.message} />
             </div>
           </div>
 
@@ -321,9 +311,10 @@ export default function CollectionFormModal({
             </button>
             <button
               type="submit"
-              className="flex-1 py-[11px] text-[12.5px] font-bold rounded-lg bg-[#D4AF37] text-[#1F1F1F] hover:opacity-90 transition-opacity"
+              disabled={isSubmitting}
+              className="flex-1 py-[11px] text-[12.5px] font-bold rounded-lg bg-[#D4AF37] text-[#1F1F1F] hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Simpan koleksi
+              {isSubmitting ? "Menyimpan…" : "Simpan koleksi"}
             </button>
           </div>
         </form>
