@@ -1,38 +1,42 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useState } from "react";
-import type { FormEvent } from "react";
+import { useForm } from "react-hook-form";
 import { AuthHeading } from "../../components/AuthShell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiPost } from "@/lib/api";
-import type { ForgotPasswordRequest } from "@/types";
+import { forgotPasswordSchema } from "@/lib/validations/auth";
+import type { ForgotPasswordFormValues } from "@/lib/validations/auth";
 
 export function ForgotPasswordForm() {
-  const [email, setEmail] = useState("");
   const [sentMessage, setSentMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ForgotPasswordFormValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
+  });
+
+  async function onSubmit(values: ForgotPasswordFormValues) {
+    setServerError(null);
     setSentMessage(null);
-    setSubmitting(true);
     try {
-      const payload: ForgotPasswordRequest = { email };
-      const { message } = await apiPost<null>("/api/auth/forgot-password", payload);
+      const { message } = await apiPost<null>("/api/auth/forgot-password", values);
       setSentMessage(message ?? "Tautan atur ulang sudah dikirim.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengirim tautan. Coba lagi.");
-    } finally {
-      setSubmitting(false);
+      setServerError(err instanceof Error ? err.message : "Gagal mengirim tautan. Coba lagi.");
     }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <Link href="/login" className="mb-[22px] inline-block text-[12.5px] font-bold text-ink-soft hover:text-ink">
         Kembali ke halaman masuk
       </Link>
@@ -46,9 +50,9 @@ export function ForgotPasswordForm() {
           {sentMessage}
         </div>
       )}
-      {error && (
+      {serverError && (
         <div role="alert" className="mb-4 rounded-[9px] border border-danger-line bg-danger-bg px-3.5 py-3 text-[13px] leading-normal text-danger">
-          {error}
+          {serverError}
         </div>
       )}
 
@@ -58,13 +62,12 @@ export function ForgotPasswordForm() {
         type="email"
         autoComplete="username"
         placeholder="nama@mpupurwa.id"
-        required
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
+        error={errors.email?.message}
+        {...register("email")}
       />
 
-      <Button type="submit" block disabled={submitting}>
-        {submitting ? "Mengirim…" : "Kirim tautan atur ulang"}
+      <Button type="submit" block disabled={isSubmitting}>
+        {isSubmitting ? "Mengirim…" : "Kirim tautan atur ulang"}
       </Button>
     </form>
   );
