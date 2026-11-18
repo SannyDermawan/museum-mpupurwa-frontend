@@ -1,22 +1,44 @@
 "use client";
 
 import { useId, useState } from "react";
-import type { FormEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { FormAlert } from "../../components/FormAlert";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { apiPost } from "@/lib/api";
-import { EMAIL_PATTERN, ROLE_LABEL } from "@/lib/accounts";
+import { ROLE_LABEL } from "@/lib/accounts";
+import { addAdminSchema, type AddAdminFormValues } from "@/lib/validations/accounts";
 import type { AdminAccount, CreateAdminRequest, UserRole } from "@/types";
 
-const MIN_PASSWORD_LENGTH = 8;
-const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+const UPPERCASE = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOWERCASE = "abcdefghijkmnpqrstuvwxyz";
+const DIGITS = "23456789";
+const PASSWORD_CHARS = UPPERCASE + LOWERCASE + DIGITS;
 
-/** "Mpu-7Kd92x": easy to read out loud, so there is no 0/O or 1/l/I. */
+/** Random integer from 0 up to (not including) `max`, from the browser's secure random generator. */
+function randomBelow(max: number): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] % max;
+}
+
+function pick(chars: string): string {
+  return chars[randomBelow(chars.length)];
+}
+
+/**
+ * "Mpu-7Kd92x": easy to read out loud, so there is no 0/O or 1/l/I.
+ * The 6 random characters always hold an uppercase letter, a lowercase letter and a digit,
+ * so the password passes the backend rule (validatePassword) every time.
+ */
 function generateTemporaryPassword(): string {
-  const picks = Array.from({ length: 6 }, () => PASSWORD_CHARS[Math.floor(Math.random() * PASSWORD_CHARS.length)]);
+  const picks = [pick(UPPERCASE), pick(LOWERCASE), pick(DIGITS), pick(PASSWORD_CHARS), pick(PASSWORD_CHARS), pick(PASSWORD_CHARS)];
+  // Fisher-Yates shuffle, so the three required characters are not always first.
+  for (let i = picks.length - 1; i > 0; i--) {
+    const j = randomBelow(i + 1);
+    [picks[i], picks[j]] = [picks[j], picks[i]];
+  }
   return `Mpu-${picks.join("")}`;
 }
 
@@ -26,45 +48,34 @@ type Props = {
   onCreated: () => void;
 };
 
-type Errors = Partial<Record<"name" | "email" | "password", string>>;
-
 /** Popup "Tambah Admin Baru". Mount it only while it is open, so the form starts empty each time. */
 export function AddAdminModal({ onClose, onCreated }: Props) {
   const formId = useId();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<UserRole>("admin");
-  const [password, setPassword] = useState(generateTemporaryPassword);
-  const [errors, setErrors] = useState<Errors>({});
+  // Generated once when the modal opens, not on every render.
+  const [initialPassword] = useState(generateTemporaryPassword);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<AddAdminFormValues>({
+    resolver: zodResolver(addAdminSchema),
+    defaultValues: { name: "", email: "", role: "admin", temporaryPassword: initialPassword },
+  });
 
-  function validate(): Errors {
-    const found: Errors = {};
-    if (!name.trim()) found.name = "Nama lengkap wajib diisi.";
-    if (!email.trim()) found.email = "Email wajib diisi.";
-    else if (!EMAIL_PATTERN.test(email.trim())) found.email = "Format email tidak valid.";
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      found.password = `Kata sandi sementara minimal ${MIN_PASSWORD_LENGTH} karakter.`;
-    }
-    return found;
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const found = validate();
-    setErrors(found);
+  async function onSubmit(values: AddAdminFormValues) {
     setServerError(null);
-    if (Object.keys(found).length > 0) return;
-
-    setSubmitting(true);
     try {
-      const payload: CreateAdminRequest = { name: name.trim(), email: email.trim(), role, temporaryPassword: password };
+      const payload: CreateAdminRequest = {
+        name: values.name,
+        email: values.email,
+        role: values.role,
+        temporaryPassword: values.temporaryPassword,
+      };
       await apiPost<AdminAccount>("/api/accounts/admins", payload);
       onCreated();
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Gagal membuat akun admin.");
-      setSubmitting(false);
     }
   }
 
@@ -78,37 +89,30 @@ export function AddAdminModal({ onClose, onCreated }: Props) {
           <Button variant="outline" className="flex-1 p-[11px]!" onClick={onClose}>
             Batal
           </Button>
-          <Button type="submit" form={formId} className="flex-1 p-[11px]!" disabled={submitting}>
-            {submitting ? "Membuat…" : "Buat akun admin"}
+          <Button type="submit" form={formId} className="flex-1 p-[11px]!" disabled={isSubmitting}>
+            {isSubmitting ? "Membuat…" : "Buat akun admin"}
           </Button>
         </>
       }
     >
-      <form id={formId} noValidate onSubmit={handleSubmit}>
+      <form id={formId} noValidate onSubmit={handleSubmit(onSubmit)}>
         <Input
           id={`${formId}-name`}
           label="Nama lengkap"
           placeholder="Nama admin"
-          value={name}
-          error={errors.name}
+          error={errors.name?.message}
           autoFocus
-          onChange={(event) => setName(event.target.value)}
+          {...register("name")}
         />
         <Input
           id={`${formId}-email`}
           label="Email"
           type="email"
           placeholder="nama@mpupurwa.id"
-          value={email}
-          error={errors.email}
-          onChange={(event) => setEmail(event.target.value)}
+          error={errors.email?.message}
+          {...register("email")}
         />
-        <Select
-          id={`${formId}-role`}
-          label="Peran"
-          value={role}
-          onChange={(event) => setRole(event.target.value as UserRole)}
-        >
+        <Select id={`${formId}-role`} label="Peran" error={errors.role?.message} {...register("role")}>
           {(Object.keys(ROLE_LABEL) as UserRole[]).map((value) => (
             <option key={value} value={value}>
               {ROLE_LABEL[value]}
@@ -120,9 +124,8 @@ export function AddAdminModal({ onClose, onCreated }: Props) {
           label="Kata sandi sementara"
           type="text"
           autoComplete="off"
-          value={password}
-          error={errors.password}
-          onChange={(event) => setPassword(event.target.value)}
+          error={errors.temporaryPassword?.message}
+          {...register("temporaryPassword")}
         />
         <p className="-mt-1 text-xs leading-normal text-ink-soft">
           Admin baru diminta mengganti kata sandi saat pertama kali masuk.

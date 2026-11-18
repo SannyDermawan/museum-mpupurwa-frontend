@@ -1,12 +1,21 @@
-// Aturan Zod yang dipakai ulang di banyak form. Skema khusus satu fitur ditulis di file sendiri
-// di folder ini (auth.ts, accounts.ts, collections.ts) dan memakai potongan di bawah.
-
 import { z } from "zod";
 
-/** Teks wajib: spasi di kiri dan kanan dibuang, lalu tidak boleh kosong. */
-export function requiredText(message: string) {
-  return z.string().trim().min(1, message);
-}
+/** Teks wajib: di-trim dulu, lalu tidak boleh kosong. */
+export const requiredText = (message: string) => z.string().trim().min(1, message);
 
-/** Email: wajib diisi dulu, baru formatnya dicek (hanya satu pesan error yang tampil). */
-export const emailSchema = requiredText("Email wajib diisi.").pipe(z.email("Format email tidak valid."));
+/** Sama dengan pola email di backend (accounts.controller.ts). */
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const emailSchema = requiredText("Email wajib diisi.").regex(EMAIL_PATTERN, "Format email tidak valid.");
+
+/**
+ * Kata sandi baru (mis. sandi sementara admin). Aturannya HARUS sama dengan backend/src/lib/validatePassword.ts:
+ * minimal 8 karakter, memuat huruf kecil, huruf besar, dan angka.
+ */
+export const passwordSchema = z
+  .string()
+  .min(1, "Kata sandi wajib diisi.")
+  .min(8, "Kata sandi minimal 8 karakter.")
+  .regex(/[a-z]/, "Kata sandi harus memuat huruf kecil.")
+  .regex(/[A-Z]/, "Kata sandi harus memuat huruf besar.")
+  .regex(/[0-9]/, "Kata sandi harus memuat angka.");

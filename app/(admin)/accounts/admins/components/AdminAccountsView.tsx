@@ -17,7 +17,7 @@ import { Table, Td, Th, Tr } from "@/components/ui/Table";
 import { useApiData } from "@/hooks/use-api-data";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ROLE_LABEL, STATUS_LABEL, formatLastLogin } from "@/lib/accounts";
-import { useAuthUser } from "@/lib/auth-storage";
+import { useAuthUser } from "@/lib/user-auth";
 import type { AdminAccount, AdminAccountsData } from "@/types";
 
 const COLUMNS = ["Admin", "Peran", "Login terakhir", "Status", "Aksi"];

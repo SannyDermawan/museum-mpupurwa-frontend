@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TextLink } from "@/components/ui/TextLink";
 import { apiPost } from "@/lib/api";
-import { setAuthUser } from "@/lib/auth-storage";
+import { setAuthUser } from "@/lib/user-auth";
 import { loginSchema } from "@/lib/validations/auth";
 import type { LoginFormValues } from "@/lib/validations/auth";
 import type { LoginData } from "@/types";
